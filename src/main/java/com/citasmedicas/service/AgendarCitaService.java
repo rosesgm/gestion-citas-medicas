@@ -23,7 +23,12 @@ public class AgendarCitaService {
         cita.setHora(hora);
         cita.setMotivo(motivo);
         cita.setEstado("CONFIRMADA");
+        
+        DisponibilidadService ds = new DisponibilidadService();
 
+if(!ds.estaDisponible(medico, fecha, hora)){
+    throw new IllegalArgumentException("Horario no disponible");
+}
         return cita;
 }
 }
