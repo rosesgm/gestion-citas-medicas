@@ -49,3 +49,36 @@ INSERT INTO medicos (nombre, especialidad_id, consultorio, disponible) VALUES
 INSERT INTO pacientes (nombre, correo, telefono) VALUES
     ('Ana García',    'ana.garcia@correo.com',    '6221001001'),
     ('Luis Martínez', 'luis.martinez@correo.com', '6221002002');
+
+ CREATE TABLE IF NOT EXISTS usuarios_google (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    google_sub VARCHAR(100) NOT NULL UNIQUE,
+    nombre VARCHAR(150) NOT NULL,
+    correo VARCHAR(150) NOT NULL,
+    foto_url VARCHAR(500),
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS google_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    usuario_google_id INT NOT NULL,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT,
+    token_type VARCHAR(50),
+    expires_at TIMESTAMP NULL,
+    scope TEXT,
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_google_id) REFERENCES usuarios_google(id)
+);
+
+CREATE TABLE IF NOT EXISTS cita_sync_google (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cita_id INT NOT NULL UNIQUE,
+    usuario_google_id INT NOT NULL,
+    google_event_id VARCHAR(255),
+    estado_sync ENUM('PENDIENTE','SINCRONIZADA','ERROR') NOT NULL DEFAULT 'PENDIENTE',
+    ultimo_error VARCHAR(500),
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (cita_id) REFERENCES citas(id),
+    FOREIGN KEY (usuario_google_id) REFERENCES usuarios_google(id)
+);

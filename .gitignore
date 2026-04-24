@@ -1,3 +1,6 @@
 target/
 *.class
 .idea/
+.nb-gradle/
+src/main/resources/credentials.json
+tokens/
