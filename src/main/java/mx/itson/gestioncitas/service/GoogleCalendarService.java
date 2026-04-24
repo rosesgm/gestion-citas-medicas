@@ -1,12 +1,9 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package mx.itson.gestioncitas.service;
 
 import com.google.api.client.util.DateTime;
 import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.model.Event;
+import com.google.api.services.calendar.model.EventAttendee;
 import com.google.api.services.calendar.model.EventDateTime;
 import mx.itson.gestioncitas.model.Cita;
 
@@ -14,14 +11,13 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * Crea, actualiza y elimina eventos en Google Calendar.
- * Depende de GoogleAuthService para obtener la Credential activa.
- */
+/** Crea, actualiza y elimina eventos en Google Calendar del admin autenticado. */
 public class GoogleCalendarService {
 
-    private static final String ZONA_HORARIA = "America/Hermosillo"; // Sonora, sin cambio de horario
+    private static final String ZONA_HORARIA = "America/Hermosillo";
 
     private final Calendar calendarApi;
 
@@ -35,7 +31,7 @@ public class GoogleCalendarService {
     }
 
     /**
-     * Crea un evento en el calendario primario del usuario autenticado.
+     * Crea un evento en el calendario del admin e invita al paciente por correo.
      *
      * @param cita cita médica a sincronizar
      * @return ID del evento creado en Google Calendar
@@ -43,8 +39,10 @@ public class GoogleCalendarService {
      */
     public String crearEvento(Cita cita) throws IOException {
         Event evento = construirEvento(cita);
-        Event creado = calendarApi.events().insert("primary", evento).execute();
-
+        Event creado = calendarApi.events()
+                .insert("primary", evento)
+                .setSendUpdates("all") // envía invitación por correo al paciente
+                .execute();
         System.out.println("[GoogleCalendarService] Evento creado: " + creado.getHtmlLink());
         return creado.getId();
     }
@@ -61,59 +59,57 @@ public class GoogleCalendarService {
     }
 
     /**
-     * Actualiza el título/descripción de un evento existente.
-     * Útil si cambia el motivo o el médico de la cita.
+     * Actualiza un evento existente con los datos actuales de la cita.
      *
      * @param googleEventId ID del evento en Google Calendar
      * @param cita          cita con los datos actualizados
      * @throws IOException si falla la llamada a la API
      */
     public void actualizarEvento(String googleEventId, Cita cita) throws IOException {
-        Event evento = construirEvento(cita);
-        calendarApi.events().update("primary", googleEventId, evento).execute();
+        calendarApi.events().update("primary", googleEventId, construirEvento(cita)).execute();
         System.out.println("[GoogleCalendarService] Evento actualizado: " + googleEventId);
     }
 
-    // ── privados ─────────────────────────────────────────────────────────────
+    // ── helpers ──────────────────────────────────────────────────────────────
 
     private Event construirEvento(Cita cita) {
-        // Inicio: fecha + hora de la cita
         LocalDateTime inicio = LocalDateTime.of(cita.getFecha(), cita.getHora());
-        // Fin: 30 minutos después (duración estándar de consulta)
-        LocalDateTime fin = inicio.plusMinutes(30);
+        LocalDateTime fin    = inicio.plusMinutes(30);
 
         String titulo = "Cita médica: " + cita.getMedico().getNombre()
                 + " — " + cita.getMedico().getEspecialidad();
-
         String descripcion = String.format(
                 "Paciente: %s\nMédico: %s\nConsultorio: %s\nMotivo: %s",
                 cita.getPaciente().getNombre(),
                 cita.getMedico().getNombre(),
                 cita.getMedico().getConsultorio(),
-                cita.getMotivo() != null ? cita.getMotivo() : "—"
-        );
+                cita.getMotivo() != null ? cita.getMotivo() : "—");
 
-        return new Event()
+        Event evento = new Event()
                 .setSummary(titulo)
                 .setDescription(descripcion)
                 .setLocation(cita.getMedico().getConsultorio())
                 .setStart(toEventDateTime(inicio))
                 .setEnd(toEventDateTime(fin));
+
+        // Invitar al paciente si tiene correo registrado
+        if (cita.getPaciente().getCorreo() != null
+                && !cita.getPaciente().getCorreo().isBlank()) {
+            List<EventAttendee> asistentes = new ArrayList<>();
+            asistentes.add(new EventAttendee()
+                    .setEmail(cita.getPaciente().getCorreo())
+                    .setDisplayName(cita.getPaciente().getNombre()));
+            evento.setAttendees(asistentes);
+        }
+
+        return evento;
     }
 
     private EventDateTime toEventDateTime(LocalDateTime ldt) {
-        // Convierte LocalDateTime a RFC3339 con offset de zona horaria
-        ZoneId zona = ZoneId.of(ZONA_HORARIA);
-        String offsetStr = zona.getRules()
-                .getOffset(ldt.atZone(zona).toInstant())
-                .toString();
-
-        // Google necesita formato: 2025-06-15T10:30:00-07:00
+        ZoneId zona      = ZoneId.of(ZONA_HORARIA);
+        String offsetStr = zona.getRules().getOffset(ldt.atZone(zona).toInstant()).toString();
         String formatted = ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"))
                 + offsetStr;
-
-        return new EventDateTime()
-                .setDateTime(new DateTime(formatted))
-                .setTimeZone(ZONA_HORARIA);
+        return new EventDateTime().setDateTime(new DateTime(formatted)).setTimeZone(ZONA_HORARIA);
     }
 }

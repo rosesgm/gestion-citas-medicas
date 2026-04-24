@@ -47,4 +47,6 @@ public interface ICitaRepository {
      * @return true si el horario está ocupado
      */
     boolean existeCitaEnHorario(int medicoId, LocalDate fecha, LocalTime hora);
+
+    List<Cita> listarTodas();
 }

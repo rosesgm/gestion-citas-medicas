@@ -1,6 +1,10 @@
 CREATE DATABASE IF NOT EXISTS gestion_citas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE gestion_citas;
 
+-- ------------------------------------------------------------
+-- Tablas base del sistema
+-- ------------------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS especialidades (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     nombre      VARCHAR(100) NOT NULL,
@@ -36,6 +40,51 @@ CREATE TABLE IF NOT EXISTS citas (
     CONSTRAINT uq_medico_fecha_hora UNIQUE (medico_id, fecha, hora)
 );
 
+-- ------------------------------------------------------------
+-- Tablas de autenticación Google (admin/recepcionista)
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS usuarios_google (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    google_sub VARCHAR(255) NOT NULL,
+    nombre     VARCHAR(150) NOT NULL,
+    correo     VARCHAR(150) NOT NULL,
+    foto_url   VARCHAR(500),
+    creado_en  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_google_sub UNIQUE (google_sub)
+);
+
+CREATE TABLE IF NOT EXISTS google_tokens (
+    id                INT AUTO_INCREMENT PRIMARY KEY,
+    usuario_google_id INT NOT NULL,
+    access_token      TEXT NOT NULL,
+    refresh_token     TEXT,
+    token_type        VARCHAR(20) DEFAULT 'Bearer',
+    expires_at        DATETIME,
+    scope             TEXT,
+    actualizado_en    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_token_usuario FOREIGN KEY (usuario_google_id) REFERENCES usuarios_google(id),
+    CONSTRAINT uq_token_usuario UNIQUE (usuario_google_id)
+);
+
+-- Registra el estado de sincronización de cada cita con Google Calendar
+CREATE TABLE IF NOT EXISTS citas_sync_google (
+    id                INT AUTO_INCREMENT PRIMARY KEY,
+    cita_id           INT NOT NULL,
+    usuario_google_id INT NOT NULL,
+    google_event_id   VARCHAR(255),
+    estado_sync       ENUM('PENDIENTE','SINCRONIZADA','ERROR') NOT NULL DEFAULT 'PENDIENTE',
+    ultimo_error      VARCHAR(500),
+    actualizado_en    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sync_cita    FOREIGN KEY (cita_id)           REFERENCES citas(id),
+    CONSTRAINT fk_sync_usuario FOREIGN KEY (usuario_google_id) REFERENCES usuarios_google(id),
+    CONSTRAINT uq_sync_cita    UNIQUE (cita_id)
+);
+
+-- ------------------------------------------------------------
+-- Datos de prueba
+-- ------------------------------------------------------------
+
 INSERT INTO especialidades (nombre, descripcion) VALUES
     ('Cardiología',  'Enfermedades del corazón y sistema circulatorio'),
     ('Pediatría',    'Atención médica a niños y adolescentes'),
@@ -49,36 +98,3 @@ INSERT INTO medicos (nombre, especialidad_id, consultorio, disponible) VALUES
 INSERT INTO pacientes (nombre, correo, telefono) VALUES
     ('Ana García',    'ana.garcia@correo.com',    '6221001001'),
     ('Luis Martínez', 'luis.martinez@correo.com', '6221002002');
-
- CREATE TABLE IF NOT EXISTS usuarios_google (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    google_sub VARCHAR(100) NOT NULL UNIQUE,
-    nombre VARCHAR(150) NOT NULL,
-    correo VARCHAR(150) NOT NULL,
-    foto_url VARCHAR(500),
-    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS google_tokens (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    usuario_google_id INT NOT NULL,
-    access_token TEXT NOT NULL,
-    refresh_token TEXT,
-    token_type VARCHAR(50),
-    expires_at TIMESTAMP NULL,
-    scope TEXT,
-    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (usuario_google_id) REFERENCES usuarios_google(id)
-);
-
-CREATE TABLE IF NOT EXISTS cita_sync_google (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    cita_id INT NOT NULL UNIQUE,
-    usuario_google_id INT NOT NULL,
-    google_event_id VARCHAR(255),
-    estado_sync ENUM('PENDIENTE','SINCRONIZADA','ERROR') NOT NULL DEFAULT 'PENDIENTE',
-    ultimo_error VARCHAR(500),
-    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (cita_id) REFERENCES citas(id),
-    FOREIGN KEY (usuario_google_id) REFERENCES usuarios_google(id)
-);

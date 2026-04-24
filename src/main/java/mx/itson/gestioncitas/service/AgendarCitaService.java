@@ -11,31 +11,22 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Caso de uso principal: agendar, listar y cancelar citas.
- * Si se inyecta un CalendarSyncService, sincroniza automáticamente con Google Calendar.
- * Si no (null), opera solo con la BD local — sin romper el flujo.
- */
 public class AgendarCitaService {
 
-    private final ICitaRepository      citaRepository;
-    private final DisponibilidadService disponibilidadService;
-    private final CalendarSyncService  calendarSync; // puede ser null
+    private final ICitaRepository       citaRepository;
+    private final DisponibilidadService  disponibilidadService;
+    private final CalendarSyncService    calendarSync; // null si no hay sesión Google activa
 
-    /**
-     * Constructor completo: con sincronización a Google Calendar.
-     */
+    /** Constructor completo: con sincronización a Google Calendar. */
     public AgendarCitaService(ICitaRepository citaRepository,
                               DisponibilidadService disponibilidadService,
                               CalendarSyncService calendarSync) {
-        this.citaRepository        = citaRepository;
+        this.citaRepository       = citaRepository;
         this.disponibilidadService = disponibilidadService;
         this.calendarSync          = calendarSync;
     }
 
-    /**
-     * Constructor sin Google Calendar (compatibilidad con código existente).
-     */
+    /** Constructor sin Google Calendar. */
     public AgendarCitaService(ICitaRepository citaRepository,
                               DisponibilidadService disponibilidadService) {
         this(citaRepository, disponibilidadService, null);
@@ -43,7 +34,7 @@ public class AgendarCitaService {
 
     /**
      * Agenda y confirma una cita médica.
-     * Si hay CalendarSyncService activo, crea el evento en Google Calendar.
+     * Si hay sesión Google activa, crea el evento en Google Calendar.
      *
      * @param paciente paciente que agenda
      * @param medico   médico asignado
@@ -56,7 +47,6 @@ public class AgendarCitaService {
      */
     public Cita agendarCita(Paciente paciente, Medico medico,
                             LocalDate fecha, LocalTime hora, String motivo) {
-
         if (paciente == null) throw new IllegalArgumentException("El paciente no puede ser nulo.");
         if (medico   == null) throw new IllegalArgumentException("El médico no puede ser nulo.");
         if (fecha    == null) throw new IllegalArgumentException("La fecha no puede ser nula.");
@@ -64,33 +54,37 @@ public class AgendarCitaService {
         if (fecha.isBefore(LocalDate.now()))
             throw new IllegalArgumentException("No se puede agendar una cita en fecha pasada.");
 
-        if (!disponibilidadService.estaDisponible(medico, fecha, hora)) {
-            throw new IllegalStateException(
-                    "El médico " + medico.getNombre()
-                            + " no está disponible el " + fecha + " a las " + hora
-            );
-        }
+        if (!disponibilidadService.estaDisponible(medico, fecha, hora))
+            throw new IllegalStateException("El médico " + medico.getNombre()
+                    + " no está disponible el " + fecha + " a las " + hora);
 
-        // 1. Guardar en BD local
         Cita cita = new Cita(paciente, medico, fecha, hora, motivo);
         cita = citaRepository.guardar(cita);
         cita.confirmar();
         citaRepository.actualizarEstado(cita.getId(), EstadoCita.CONFIRMADA);
 
-        System.out.println("[AgendarCitaService] Cita agendada: " + cita);
-
-        // 2. Sincronizar con Google Calendar (no bloquea aunque falle)
-        if (calendarSync != null) {
+        if (calendarSync != null)
             calendarSync.sincronizarNuevaCita(cita);
-        }
 
         return cita;
     }
 
     /**
-     * Lista todas las citas de un paciente.
+     * Lista todas las citas registradas (para la vista del admin).
+     *
+     * @return lista de citas, puede estar vacía
      */
-    public List<Cita> listarCitasPorPaciente(int pacienteId) {
+    public List<Cita> listarTodas() {
+        return citaRepository.listarTodas();
+    }
+
+    /**
+     * Lista todas las citas de un paciente.
+     *
+     * @param pacienteId ID del paciente
+     * @return lista de citas, puede estar vacía
+     */
+    public List<Cita> listarPorPaciente(int pacienteId) {
         return citaRepository.listarPorPaciente(pacienteId);
     }
 
@@ -102,19 +96,13 @@ public class AgendarCitaService {
      */
     public void cancelarCita(int citaId) {
         Optional<Cita> optional = citaRepository.buscarPorId(citaId);
-
         Cita cita = optional.orElseThrow(() ->
-                new IllegalStateException("Cita con ID " + citaId + " no encontrada.")
-        );
+                new IllegalStateException("Cita con ID " + citaId + " no encontrada."));
 
         cita.cancelar();
         citaRepository.actualizarEstado(citaId, EstadoCita.CANCELADA);
 
-        System.out.println("[AgendarCitaService] Cita " + citaId + " cancelada.");
-
-        // Eliminar evento de Google Calendar si existe
-        if (calendarSync != null) {
+        if (calendarSync != null)
             calendarSync.eliminarEventoCancelada(citaId);
-        }
     }
 }

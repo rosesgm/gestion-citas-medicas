@@ -28,12 +28,10 @@ public class DisponibilidadService {
             System.out.println("[DisponibilidadService] Médico inactivo: " + medico.getNombre());
             return false;
         }
-
         boolean ocupado = citaRepository.existeCitaEnHorario(medico.getId(), fecha, hora);
-        if (ocupado) {
-            System.out.println("[DisponibilidadService] Horario ocupado para: "
+        if (ocupado)
+            System.out.println("[DisponibilidadService] Horario ocupado: "
                     + medico.getNombre() + " el " + fecha + " a las " + hora);
-        }
         return !ocupado;
     }
 }
