@@ -1,3 +1,4 @@
+DROP DATABASE gestion_citas;
 CREATE DATABASE IF NOT EXISTS gestion_citas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE gestion_citas;
 
@@ -96,5 +97,5 @@ INSERT INTO medicos (nombre, especialidad_id, consultorio, disponible) VALUES
     ('Dr. Miguel Torres',  3, 'Consultorio 312', 1);
 
 INSERT INTO pacientes (nombre, correo, telefono) VALUES
-    ('Ana García',    'ana.garcia@correo.com',    '6221001001'),
-    ('Luis Martínez', 'luis.martinez@correo.com', '6221002002');
+    ('José Castro',    'jose.castro261299@potros.itson.edu.mx', '6221001001'),
+    ('Rosa Gabriela', 'rosa.pina@potros.itson.edu.mx', '6221002002');

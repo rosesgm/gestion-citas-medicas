@@ -10,7 +10,7 @@ public class ConexionDB {
             + "?useSSL=false&serverTimezone=UTC"
             + "&allowPublicKeyRetrieval=true";
     private static final String USER     = "root";  // Usuario de SQL
-    private static final String PASSWORD = "250597Pi";       // Contraseña de SQL
+    private static final String PASSWORD = "admin";       // Contraseña de SQL
 
     private ConexionDB() {}
 

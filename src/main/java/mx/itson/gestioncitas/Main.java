@@ -9,51 +9,49 @@ import java.util.Scanner;
 
 /**
  * Punto de entrada y Composition Root.
- *
- * Flujo de inicio:
- *  1. El admin elige iniciar sesión con Google o continuar sin Calendar.
- *  2. Si inicia sesión, las citas se sincronizan automáticamente.
- *  3. El menú de consola queda activo hasta que el admin elija salir.
+ * Único lugar donde se instancian las implementaciones concretas;
+ * el resto del sistema depende solo de interfaces.
  */
 public class Main {
 
     public static void main(String[] args) {
 
-        // ── Repositorios ──────────────────────────────────────────────────────
-        ICitaRepository          citaRepo    = new CitaRepository();
-        IUsuarioGoogleRepository  usuarioRepo = new UsuarioGoogleRepository();
-        IGoogleTokenRepository    tokenRepo   = new GoogleTokenRepository();
-        ICitaSyncGoogleRepository syncRepo    = new CitaSyncGoogleRepository();
+        ICitaRepository           citaRepo     = new CitaRepository();
+        IPacienteRepository       pacienteRepo = new PacienteRepository();
+        IMedicoRepository         medicoRepo   = new MedicoRepository();
+        IUsuarioGoogleRepository  usuarioRepo  = new UsuarioGoogleRepository();
+        IGoogleTokenRepository    tokenRepo    = new GoogleTokenRepository();
+        ICitaSyncGoogleRepository syncRepo     = new CitaSyncGoogleRepository();
 
-        // ── Servicios base ────────────────────────────────────────────────────
         DisponibilidadService disponibilidadSvc = new DisponibilidadService(citaRepo);
         GoogleOAuthService    oauthSvc          = new GoogleOAuthService(usuarioRepo, tokenRepo);
         GoogleAuthService     authSvc           = new GoogleAuthService(oauthSvc, usuarioRepo, tokenRepo);
 
-        // ── Autenticación opcional con Google ─────────────────────────────────
-        UsuarioGoogle      adminActual     = null;
+        UsuarioGoogle       adminActual     = null;
         CalendarSyncService calendarSyncSvc = null;
 
         System.out.println("\n══════════════════════════════════════════");
         System.out.println("  Gestión de Citas Médicas — ITSON");
         System.out.println("══════════════════════════════════════════");
-        System.out.print("  ¿Iniciar sesión con Google? (s/n): ");
+        System.out.print("  ¿Iniciar sesión con Google Calendar? (s/n): ");
 
         Scanner sc = new Scanner(System.in);
         String respuesta = sc.nextLine().trim().toLowerCase();
 
         if (respuesta.equals("s")) {
-            System.out.print("  Correo (Enter para sesión nueva): ");
+            // Correo vacío → abre navegador para autenticación nueva (OAuth)
+            System.out.print("  Correo admin (Enter para sesión nueva): ");
             String correo = sc.nextLine().trim();
 
             try {
                 adminActual = authSvc.autenticar(correo.isEmpty() ? null : correo);
                 System.out.println("  ✔ Sesión activa: " + adminActual.getNombre()
-                        + " <" + adminActual.getCorreo() + ">");
+                        + "  <" + adminActual.getCorreo() + ">");
 
                 GoogleCalendarService calendarSvc = new GoogleCalendarService(authSvc);
                 calendarSyncSvc = new CalendarSyncService(calendarSvc, syncRepo, adminActual);
-                System.out.println("  ✔ Google Calendar conectado. Las citas se sincronizarán automáticamente.");
+                System.out.println("  ✔ Google Calendar conectado. Las citas se sincronizarán con "
+                        + adminActual.getCorreo() + ".");
 
             } catch (Exception e) {
                 System.out.println("  ✘ Login con Google falló: " + e.getMessage());
@@ -63,11 +61,10 @@ public class Main {
             System.out.println("  → Continuando sin Google Calendar.");
         }
 
-        // ── AgendarCitaService con o sin Calendar ─────────────────────────────
+        // calendarSyncSvc puede ser null; AgendarCitaService lo maneja sin problema
         AgendarCitaService agendarSvc = new AgendarCitaService(
                 citaRepo, disponibilidadSvc, calendarSyncSvc);
 
-        // ── Menú interactivo ──────────────────────────────────────────────────
-        new Menu(agendarSvc, adminActual).iniciar();
+        new Menu(agendarSvc, pacienteRepo, medicoRepo, adminActual).iniciar();
     }
 }
